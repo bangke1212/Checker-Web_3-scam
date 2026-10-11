@@ -1,4 +1,4 @@
-import { isValidChainId } from './chains'
+import { isValidChainId } from './chains.js'
 
 export type TargetKind = 'token' | 'address' | 'website' | 'unknown'
 export type RiskLevel = 'Low' | 'Medium' | 'High'
