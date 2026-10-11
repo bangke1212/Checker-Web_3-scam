@@ -11,6 +11,20 @@ pnpm dev
 
 The local UI uses a transparent client-side fallback because Vite does not run the Vercel function. Production requests use `POST /api/analyze` with `{ "input": "..." }`.
 
+## Live threat intelligence
+
+The serverless API supports live EVM checks when these **server-only** environment variables are configured in Vercel:
+
+```bash
+GOPLUS_ACCESS_TOKEN=...
+ETHERSCAN_API_KEY=...
+SCAMGUARD_CHAIN_ID=1
+```
+
+GoPlus supplies token-security, honeypot, tax, owner privilege, creator concentration, liquidity-lock, and rug-pull beta signals. Etherscan adds verified-source, proxy, and creator-wallet metadata. The UI lets the user choose the chain; Ethereum (`1`) is the default. Keys are never sent to the browser.
+
+The score is a conservative signal aggregation, not a verdict. A high developer/rug-pull signal can reflect concentrated ownership or unlocked liquidity without proving intent; users should still inspect the exact transaction and permissions.
+
 ## Validate and build
 
 ```bash

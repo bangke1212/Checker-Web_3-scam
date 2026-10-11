@@ -9,10 +9,20 @@ const examples = [
   { label: 'Website URL', value: 'https://example.com' },
   { label: 'Token name', value: 'MoonAirdrop 100x' },
 ]
+const chains = [
+  { id: '1', label: 'Ethereum' },
+  { id: '56', label: 'BNB Chain' },
+  { id: '137', label: 'Polygon' },
+  { id: '42161', label: 'Arbitrum' },
+  { id: '8453', label: 'Base' },
+  { id: '10', label: 'Optimism' },
+  { id: '43114', label: 'Avalanche' },
+]
 
 let lastResult: Analysis | undefined
 let isScanning = false
 let recent: Analysis[] = readRecent()
+let selectedChainId = localStorage.getItem('scamguard-chain') ?? '1'
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] ?? character)
@@ -42,6 +52,7 @@ function renderShell(): void {
         <form id="scan-form" class="scan-form">
           <label class="sr-only" for="target-input">Token name, contract address, or website URL</label>
           <div class="input-wrap"><span class="input-prefix">⌕</span><input id="target-input" name="input" maxlength="300" autocomplete="off" placeholder="Paste a token name, contract address, or URL" value="${escapeHtml(lastResult?.input ?? '')}" /><kbd>ENTER</kbd></div>
+          <div class="scan-options"><label for="chain-select"><span>CHAIN FOR LIVE INTEL</span><select id="chain-select">${chains.map(chain => `<option value="${chain.id}" ${chain.id === selectedChainId ? 'selected' : ''}>${chain.label}</option>`).join('')}</select></label><small>GoPlus + Etherscan activate when server keys are configured.</small></div>
           <div class="example-row"><span>TRY AN EXAMPLE</span>${examples.map(example => `<button type="button" class="example-chip" data-example="${escapeHtml(example.value)}"><b>${escapeHtml(example.label)}</b><small>${escapeHtml(example.value.length > 24 ? `${example.value.slice(0, 21)}…` : example.value)}</small></button>`).join('')}</div>
           <button class="scan-button" type="submit" ${isScanning ? 'disabled' : ''}><span class="button-pulse"></span><b>${isScanning ? 'SCANNING SIGNALS…' : 'ANALYZE TARGET'}</b><span class="button-arrow">↗</span></button>
         </form>
@@ -68,11 +79,18 @@ function renderResult(result: Analysis): string {
     return order[a.severity] - order[b.severity]
   })
   return `<section class="report" aria-live="polite">
-    <div class="report-kicker"><span class="step-count">02 / SIGNAL REPORT</span><span class="source-pill"><i></i>${result.source === 'heuristic+http' ? 'HTTP + HEURISTIC' : 'HEURISTIC ONLY'}</span></div>
+    <div class="report-kicker"><span class="step-count">02 / SIGNAL REPORT</span><span class="source-pill ${result.source.startsWith('live') ? 'live' : ''}"><i></i>${result.source.startsWith('live') ? 'LIVE INTEL' : result.source === 'heuristic+http' ? 'HTTP + HEURISTIC' : 'HEURISTIC ONLY'}</span></div>
     <div class="report-head"><div class="score-block ${levelClass}"><div class="score-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="52"></circle><circle class="ring-value" cx="60" cy="60" r="52" style="--score:${result.score}"></circle></svg><strong>${result.score}</strong><span>/ 100</span></div><div><span class="eyebrow">RISK LEVEL</span><h2>${result.level} risk</h2><p>${escapeHtml(result.summary)}</p></div></div><div class="target-meta"><span class="eyebrow">ANALYZED TARGET</span><b>${escapeHtml(result.normalized)}</b><span>${escapeHtml(result.label)} · ${formatTime(result.checkedAt)} · ${result.latencyMs}ms</span></div></div>
     <div class="report-stats"><div><span>CHECKS RUN</span><b>${result.checks}</b></div><div><span>CRITICAL</span><b class="critical-text">${result.flags.filter(flag => flag.severity === 'critical').length}</b></div><div><span>WARNINGS</span><b class="warning-text">${result.flags.filter(flag => flag.severity === 'warning').length}</b></div><div><span>POSITIVE SIGNALS</span><b class="positive-text">${result.flags.filter(flag => flag.severity === 'positive').length}</b></div></div>
-    <div class="report-grid"><div class="flags-column"><div class="section-heading"><div><span class="eyebrow">FINDINGS</span><h3>What stood out</h3></div><span class="finding-count">${flags.length} SIGNALS</span></div>${flags.map(renderFlag).join('')}</div><aside class="report-aside"><div class="aside-card caution"><span class="aside-icon">!</span><div><span class="eyebrow">NON-NEGOTIABLE</span><h3>Never sign from pressure.</h3><p>No risk score can see everything. If a site asks for your seed phrase or private key, leave immediately.</p></div></div><div class="aside-card"><span class="eyebrow">LIMITS OF THIS SCAN</span>${result.limitations.map(item => `<p class="limit-line"><span>—</span>${escapeHtml(item)}</p>`).join('')}</div><button class="outline-button" data-action="new-scan">← CHECK ANOTHER TARGET</button></aside></div>
+    <div class="report-grid"><div class="flags-column"><div class="section-heading"><div><span class="eyebrow">FINDINGS</span><h3>What stood out</h3></div><span class="finding-count">${flags.length} SIGNALS</span></div>${flags.map(renderFlag).join('')}</div><aside class="report-aside">${renderIntel(result.threatIntel)}<div class="aside-card caution"><span class="aside-icon">!</span><div><span class="eyebrow">NON-NEGOTIABLE</span><h3>Never sign from pressure.</h3><p>No risk score can see everything. If a site asks for your seed phrase or private key, leave immediately.</p></div></div><div class="aside-card"><span class="eyebrow">LIMITS OF THIS SCAN</span>${result.limitations.map(item => `<p class="limit-line"><span>—</span>${escapeHtml(item)}</p>`).join('')}</div><button class="outline-button" data-action="new-scan">← CHECK ANOTHER TARGET</button></aside></div>
   </section>`
+}
+
+function renderIntel(intel: Analysis['threatIntel']): string {
+  if (!intel) return ''
+  const status = intel.status === 'live' ? 'LIVE' : intel.status === 'partial' ? 'PARTIAL' : 'NOT CONFIGURED'
+  const statusClass = intel.status === 'unavailable' ? 'muted' : 'live'
+  return `<div class="aside-card intel-card ${statusClass}"><div class="intel-head"><span class="eyebrow">THREAT INTEL / CHAIN ${escapeHtml(intel.chainId)}</span><span class="intel-status">${status}</span></div><h3>Developer & rug-pull signals</h3><div class="intel-grid"><div><span>DEV RISK</span><b class="risk-${intel.developerRisk.toLowerCase()}">${escapeHtml(intel.developerRisk)}</b></div><div><span>RUG-PULL RISK</span><b class="risk-${intel.rugPullRisk.toLowerCase()}">${escapeHtml(intel.rugPullRisk)}</b></div><div><span>CREATOR SHARE</span><b>${intel.creatorPercent === undefined ? '—' : `${intel.creatorPercent}%`}</b></div><div><span>LP UNLOCKED</span><b>${intel.unlockedLiquidityPercent === undefined ? '—' : `${intel.unlockedLiquidityPercent}%`}</b></div></div><p class="intel-providers">${intel.providers.length ? `Sources: ${intel.providers.map(escapeHtml).join(' · ')}` : 'Configure server-side GoPlus or Etherscan credentials for live chain data.'}</p></div>`
 }
 
 function renderFlag(flag: RiskFlag): string {
@@ -103,14 +121,14 @@ function toast(message: string): void {
   window.setTimeout(() => element.classList.remove('visible'), 2600)
 }
 
-async function runScan(input: string): Promise<void> {
+async function runScan(input: string, chainId = selectedChainId): Promise<void> {
   if (!input.trim() || isScanning) return
   isScanning = true
   renderShell()
   const started = Date.now()
   let result: Analysis | undefined
   try {
-    const response = await fetch('/api/analyze', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ input }) })
+    const response = await fetch('/api/analyze', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ input, chainId }) })
     if (!response.ok) throw new Error(`API ${response.status}`)
     result = await response.json() as Analysis
   } catch {
@@ -126,6 +144,10 @@ async function runScan(input: string): Promise<void> {
 }
 
 function bindEvents(): void {
+  root.querySelector<HTMLSelectElement>('#chain-select')?.addEventListener('change', event => {
+    selectedChainId = (event.target as HTMLSelectElement).value
+    localStorage.setItem('scamguard-chain', selectedChainId)
+  })
   root.querySelector<HTMLFormElement>('#scan-form')?.addEventListener('submit', event => {
     event.preventDefault()
     const input = root.querySelector<HTMLInputElement>('#target-input')?.value ?? ''

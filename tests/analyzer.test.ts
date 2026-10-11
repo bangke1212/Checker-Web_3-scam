@@ -55,4 +55,29 @@ describe('analyzeTarget', () => {
     expect(result.kind).toBe('website')
     expect(result.flags.some(flag => flag.title === 'URL is not a safe public URL')).toBe(true)
   })
+
+  it('merges live GoPlus and Etherscan signals into rug-pull scoring', async () => {
+    const address = '0x1111111111111111111111111111111111111111'
+    const fakeFetcher: typeof fetch = async (request) => {
+      const url = new URL(String(request))
+      const action = url.searchParams.get('action')
+      if (url.hostname === 'api.gopluslabs.io' && url.pathname.includes('token_security')) {
+        return new Response(JSON.stringify({ result: { [address.toLowerCase()]: { is_honeypot: '1', creator_percent: '0.6', owner_percent: '0.6', sell_tax: '0.8', is_open_source: '0', can_take_back_ownership: '1' } } }), { status: 200 })
+      }
+      if (url.hostname === 'api.gopluslabs.io' && url.pathname.includes('rugpull_detecting')) {
+        return new Response(JSON.stringify({ result: { [address.toLowerCase()]: { is_rug_pull: '1' } } }), { status: 200 })
+      }
+      if (action === 'getsourcecode') return new Response(JSON.stringify({ status: '1', result: [{ SourceCode: 'contract Safe {}', ContractName: 'Safe' }] }), { status: 200 })
+      if (action === 'getcontractcreation') return new Response(JSON.stringify({ status: '1', result: [{ contractCreator: '0x2222222222222222222222222222222222222222' }] }), { status: 200 })
+      return new Response('{}', { status: 404 })
+    }
+    const result = await analyzeTarget(address, { threatIntel: { chainId: '1', goPlusAccessToken: 'test', etherscanApiKey: 'test', fetcher: fakeFetcher } })
+    expect(result.source).toBe('live-intel')
+    expect(result.threatIntel?.providers).toContain('GoPlus Token Security')
+    expect(result.threatIntel?.rugPullRisk).toBe('High')
+    expect(result.flags.some(flag => flag.title === 'Honeypot behavior detected')).toBe(true)
+    expect(result.flags.some(flag => flag.title === 'Developer concentration is extreme')).toBe(true)
+    expect(result.flags.some(flag => flag.title === 'GoPlus rug-pull signal')).toBe(true)
+    expect(result.level).toBe('High')
+  })
 })
