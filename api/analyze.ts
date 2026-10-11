@@ -27,7 +27,7 @@ export default async function handler(req: RequestLike, res: ResponseLike): Prom
     return
   }
   try {
-    const analysisOptions: AnalyzeOptions = { fetcher: fetch }
+    const analysisOptions: AnalyzeOptions = { fetcher: fetch, chainId }
     if (process.env.GOPLUS_ACCESS_TOKEN || process.env.ETHERSCAN_API_KEY) analysisOptions.threatIntel = { chainId, goPlusAccessToken: process.env.GOPLUS_ACCESS_TOKEN, etherscanApiKey: process.env.ETHERSCAN_API_KEY, fetcher: fetch }
     const result = await analyzeTarget(input, analysisOptions)
     res.status(200).json(result)

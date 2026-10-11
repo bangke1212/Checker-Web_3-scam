@@ -59,6 +59,7 @@ export interface Analysis {
 export interface AnalyzeOptions {
   fetcher?: typeof fetch
   now?: () => Date
+  chainId?: string
   threatIntel?: ThreatIntelConfig
 }
 
@@ -353,7 +354,7 @@ export async function analyzeTarget(raw: string, options: AnalyzeOptions = {}): 
   const flags: RiskFlag[] = []
   let source: Analysis['source'] = 'heuristic'
   let threatIntel: ThreatIntelSnapshot | undefined
-  let chainId: string | undefined = options.threatIntel?.chainId
+  let chainId: string | undefined = options.chainId ?? options.threatIntel?.chainId
   if (!detected.normalized) pushFlag(flags, 'critical', 'Nothing to analyze', 'Paste a token name, contract address, or website URL to start a screening.', 'Input was empty', 'Enter a value above and run the scan again.')
   else if (detected.kind === 'token') analyzeToken(detected.normalized, flags)
   else if (detected.kind === 'address') {
