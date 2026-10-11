@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import handler from '../api/analyze'
+import chainsHandler from '../api/chains'
 
 type TestResponse = { code?: number; value?: unknown; status: (code: number) => TestResponse; json: (value: unknown) => void; setHeader: () => void }
 const response = (): TestResponse => ({ status(code) { this.code = code; return this }, json(value) { this.value = value }, setHeader() {} })
@@ -25,5 +26,15 @@ describe('POST /api/analyze', () => {
     expect(value.kind).toBe('address')
     expect(value.level).toBe('High')
     expect(value.flags.length).toBeGreaterThan(0)
+  })
+})
+
+describe('GET /api/chains', () => {
+  it('returns a chain registry with Robinhood fallback', async () => {
+    const res = response()
+    await chainsHandler({}, res)
+    const value = res.value as { chains: Array<{ id: string; label: string }> }
+    expect(res.code).toBe(200)
+    expect(value.chains.some(chain => chain.id === '4663' && chain.label === 'Robinhood Chain')).toBe(true)
   })
 })

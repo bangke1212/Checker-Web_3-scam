@@ -4,6 +4,7 @@ import { analyzeTarget, detectTarget } from '../src/analyzer'
 describe('detectTarget', () => {
   it('classifies public URLs', () => expect(detectTarget('https://example.com').kind).toBe('website'))
   it('classifies EVM addresses', () => expect(detectTarget('0x0000000000000000000000000000000000000000').kind).toBe('address'))
+  it('keeps malformed 0x values in address validation', () => expect(detectTarget('0xd17b7e4aab4b34e04632acf85ca4a969cd800ce').kind).toBe('address'))
   it('keeps names as token inputs', () => expect(detectTarget('Moon Airdrop').kind).toBe('token'))
 })
 
@@ -19,6 +20,12 @@ describe('analyzeTarget', () => {
     expect(result.kind).toBe('address')
     expect(result.flags.some(flag => flag.title === 'Zero address')).toBe(true)
     expect(result.level).toBe('High')
+  })
+
+  it('does not silently repair an invalid address', async () => {
+    const result = await analyzeTarget('0xd17b7e4aab4b34e04632acf85ca4a969cd800ce', { chainId: '4663' })
+    expect(result.chainId).toBe('4663')
+    expect(result.flags.some(flag => flag.title === 'Address format not recognized')).toBe(true)
   })
 
   it('keeps name-only limitations explicit', async () => {

@@ -1,3 +1,5 @@
+import { isValidChainId } from './chains'
+
 export type TargetKind = 'token' | 'address' | 'website' | 'unknown'
 export type RiskLevel = 'Low' | 'Medium' | 'High'
 export type FlagSeverity = 'critical' | 'warning' | 'positive' | 'info'
@@ -71,7 +73,6 @@ const URL_RE = /^https?:\/\//i
 const SUSPICIOUS_NAME_RE = /(airdrop|claim|presale|100x|guaranteed|free|mint|bonus|profit|yield)/i
 const SUSPICIOUS_PAGE_RE = /(seed phrase|secret phrase|private key|connect wallet|100x|guaranteed returns|claim now|send funds)/i
 const SUSPICIOUS_TLDS = new Set(['zip', 'mov', 'click', 'top', 'support', 'quest', 'live', 'buzz', 'gq', 'country'])
-const EVM_CHAIN_IDS = new Set(['1', '56', '137', '42161', '8453', '10', '43114', '250', '324', '59144', '5000', '534352'])
 
 const asRiskLevel = (score: number): RiskLevel => score <= 28 ? 'Low' : score <= 58 ? 'Medium' : 'High'
 const asIntelRisk = (score: number): IntelRisk => score >= 60 ? 'High' : score >= 25 ? 'Medium' : 'Low'
@@ -228,7 +229,7 @@ function inspectGoPlusToken(data: JsonRecord, flags: RiskFlag[]): { snapshot: Pa
 
 async function fetchThreatIntel(address: string, config: ThreatIntelConfig, flags: RiskFlag[], now: () => Date): Promise<ThreatIntelSnapshot> {
   const fetcher = config.fetcher ?? fetch
-  const chainId = EVM_CHAIN_IDS.has(config.chainId) ? config.chainId : '1'
+  const chainId = isValidChainId(config.chainId) ? config.chainId : '1'
   const providers: string[] = []
   let goPlusData: JsonRecord | undefined
   let goPlusRugData: JsonRecord | undefined
@@ -343,7 +344,7 @@ export function detectTarget(raw: string): { kind: TargetKind; normalized: strin
   const normalized = raw.trim().replace(/\s+/g, ' ')
   if (!normalized) return { kind: 'unknown', normalized, label: 'Empty input' }
   if (URL_RE.test(normalized) || /^[a-z][a-z\d+.-]*:\/\//i.test(normalized)) return { kind: 'website', normalized, label: 'Website URL' }
-  if (ADDRESS_RE.test(normalized) || SOLANA_RE.test(normalized)) return { kind: 'address', normalized, label: 'Contract / wallet address' }
+  if (/^0x/i.test(normalized) || ADDRESS_RE.test(normalized) || SOLANA_RE.test(normalized)) return { kind: 'address', normalized, label: 'Contract / wallet address' }
   return { kind: 'token', normalized, label: 'Token or project name' }
 }
 

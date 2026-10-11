@@ -1,5 +1,6 @@
 import './styles.css'
 import { analyzeTarget, type Analysis, type RiskFlag } from './analyzer'
+import { FALLBACK_CHAINS, mergeChains, type ChainDefinition } from './chains'
 
 const root = document.querySelector<HTMLDivElement>('#app')!
 if (!root) throw new Error('ScamGuard mount point is missing')
@@ -8,16 +9,9 @@ const examples = [
   { label: 'EVM address', value: '0x0000000000000000000000000000000000000000' },
   { label: 'Website URL', value: 'https://example.com' },
   { label: 'Token name', value: 'MoonAirdrop 100x' },
+  { label: 'GOATONFONE name', value: 'GOATONFONE', chainId: '4663' },
 ]
-const chains = [
-  { id: '1', label: 'Ethereum' },
-  { id: '56', label: 'BNB Chain' },
-  { id: '137', label: 'Polygon' },
-  { id: '42161', label: 'Arbitrum' },
-  { id: '8453', label: 'Base' },
-  { id: '10', label: 'Optimism' },
-  { id: '43114', label: 'Avalanche' },
-]
+let chains: ChainDefinition[] = FALLBACK_CHAINS
 
 let lastResult: Analysis | undefined
 let isScanning = false
@@ -53,7 +47,7 @@ function renderShell(): void {
           <label class="sr-only" for="target-input">Token name, contract address, or website URL</label>
           <div class="input-wrap"><span class="input-prefix">⌕</span><input id="target-input" name="input" maxlength="300" autocomplete="off" placeholder="Paste a token name, contract address, or URL" value="${escapeHtml(lastResult?.input ?? '')}" /><kbd>ENTER</kbd></div>
           <div class="scan-options"><label for="chain-select"><span>CHAIN FOR LIVE INTEL</span><select id="chain-select">${chains.map(chain => `<option value="${chain.id}" ${chain.id === selectedChainId ? 'selected' : ''}>${chain.label}</option>`).join('')}</select></label><small>GoPlus + Etherscan activate when server keys are configured.</small></div>
-          <div class="example-row"><span>TRY AN EXAMPLE</span>${examples.map(example => `<button type="button" class="example-chip" data-example="${escapeHtml(example.value)}"><b>${escapeHtml(example.label)}</b><small>${escapeHtml(example.value.length > 24 ? `${example.value.slice(0, 21)}…` : example.value)}</small></button>`).join('')}</div>
+          <div class="example-row"><span>TRY AN EXAMPLE</span>${examples.map(example => `<button type="button" class="example-chip" data-example="${escapeHtml(example.value)}" ${example.chainId ? `data-example-chain="${example.chainId}"` : ''}><b>${escapeHtml(example.label)}</b><small>${escapeHtml(example.value.length > 24 ? `${example.value.slice(0, 21)}…` : example.value)}</small></button>`).join('')}</div>
           <button class="scan-button" type="submit" ${isScanning ? 'disabled' : ''}><span class="button-pulse"></span><b>${isScanning ? 'SCANNING SIGNALS…' : 'ANALYZE TARGET'}</b><span class="button-arrow">↗</span></button>
         </form>
         <div class="privacy-note"><span>◌</span> Your input is screened only for this report. Never paste a seed phrase or private key.</div>
@@ -80,7 +74,7 @@ function renderResult(result: Analysis): string {
   })
   return `<section class="report" aria-live="polite">
     <div class="report-kicker"><span class="step-count">02 / SIGNAL REPORT</span><span class="source-pill ${result.source.startsWith('live') ? 'live' : ''}"><i></i>${result.source.startsWith('live') ? 'LIVE INTEL' : result.source === 'heuristic+http' ? 'HTTP + HEURISTIC' : 'HEURISTIC ONLY'}</span></div>
-    <div class="report-head"><div class="score-block ${levelClass}"><div class="score-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="52"></circle><circle class="ring-value" cx="60" cy="60" r="52" style="--score:${result.score}"></circle></svg><strong>${result.score}</strong><span>/ 100</span></div><div><span class="eyebrow">RISK LEVEL</span><h2>${result.level} risk</h2><p>${escapeHtml(result.summary)}</p></div></div><div class="target-meta"><span class="eyebrow">ANALYZED TARGET</span><b>${escapeHtml(result.normalized)}</b><span>${escapeHtml(result.label)} · ${formatTime(result.checkedAt)} · ${result.latencyMs}ms</span></div></div>
+    <div class="report-head"><div class="score-block ${levelClass}"><div class="score-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="52"></circle><circle class="ring-value" cx="60" cy="60" r="52" style="--score:${result.score}"></circle></svg><strong>${result.score}</strong><span>/ 100</span></div><div><span class="eyebrow">RISK LEVEL</span><h2>${result.level} risk</h2><p>${escapeHtml(result.summary)}</p></div></div><div class="target-meta"><span class="eyebrow">ANALYZED TARGET</span><b>${escapeHtml(result.normalized)}</b><span>${escapeHtml(result.label)}${result.chainId ? ` · chain ${escapeHtml(result.chainId)}` : ''} · ${formatTime(result.checkedAt)} · ${result.latencyMs}ms</span></div></div>
     <div class="report-stats"><div><span>CHECKS RUN</span><b>${result.checks}</b></div><div><span>CRITICAL</span><b class="critical-text">${result.flags.filter(flag => flag.severity === 'critical').length}</b></div><div><span>WARNINGS</span><b class="warning-text">${result.flags.filter(flag => flag.severity === 'warning').length}</b></div><div><span>POSITIVE SIGNALS</span><b class="positive-text">${result.flags.filter(flag => flag.severity === 'positive').length}</b></div></div>
     <div class="report-grid"><div class="flags-column"><div class="section-heading"><div><span class="eyebrow">FINDINGS</span><h3>What stood out</h3></div><span class="finding-count">${flags.length} SIGNALS</span></div>${flags.map(renderFlag).join('')}</div><aside class="report-aside">${renderIntel(result.threatIntel)}<div class="aside-card caution"><span class="aside-icon">!</span><div><span class="eyebrow">NON-NEGOTIABLE</span><h3>Never sign from pressure.</h3><p>No risk score can see everything. If a site asks for your seed phrase or private key, leave immediately.</p></div></div><div class="aside-card"><span class="eyebrow">LIMITS OF THIS SCAN</span>${result.limitations.map(item => `<p class="limit-line"><span>—</span>${escapeHtml(item)}</p>`).join('')}</div><button class="outline-button" data-action="new-scan">← CHECK ANOTHER TARGET</button></aside></div>
   </section>`
@@ -155,7 +149,16 @@ function bindEvents(): void {
   })
   root.querySelectorAll<HTMLButtonElement>('[data-example]').forEach(button => button.addEventListener('click', () => {
     const input = root.querySelector<HTMLInputElement>('#target-input')
-    if (input) { input.value = button.dataset.example ?? ''; input.focus() }
+    if (input) {
+      input.value = button.dataset.example ?? ''
+      if (button.dataset.exampleChain) {
+        selectedChainId = button.dataset.exampleChain
+        localStorage.setItem('scamguard-chain', selectedChainId)
+        const select = root.querySelector<HTMLSelectElement>('#chain-select')
+        if (select) select.value = selectedChainId
+      }
+      input.focus()
+    }
   }))
   root.querySelectorAll<HTMLButtonElement>('[data-recent]').forEach(button => button.addEventListener('click', () => { lastResult = undefined; const input = button.dataset.recent ?? ''; void runScan(input) }))
   root.querySelector<HTMLButtonElement>('[data-action="new-scan"]')?.addEventListener('click', () => { lastResult = undefined; renderShell(); root.querySelector<HTMLInputElement>('#target-input')?.focus() })
@@ -165,3 +168,17 @@ function bindEvents(): void {
 }
 
 renderShell()
+void loadChains()
+
+async function loadChains(): Promise<void> {
+  try {
+    const response = await fetch('/api/chains')
+    if (!response.ok) return
+    const payload = await response.json() as { chains?: ChainDefinition[] }
+    if (!Array.isArray(payload.chains)) return
+    chains = mergeChains(payload.chains)
+    if (!lastResult && !isScanning) renderShell()
+  } catch {
+    // Curated fallback stays active when the chain registry endpoint is unavailable.
+  }
+}
