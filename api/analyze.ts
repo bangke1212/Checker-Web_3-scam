@@ -1,4 +1,4 @@
-import { analyzeTarget } from '../src/analyzer'
+import { analyzeTarget } from '../src/analyzer.js'
 
 type RequestLike = { method?: string; body?: unknown }
 type ResponseLike = { status: (code: number) => ResponseLike; json: (value: unknown) => void; setHeader?: (name: string, value: string) => void }
